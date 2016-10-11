@@ -71,6 +71,7 @@ struct engine_params {
     double channel_lifetime;
     double epoch;
     int websocket_enable; /* Enable Websocket responder on (-l) */
+    int ssl_enable; /* Enable SSL/TLS */
     /* Pre-computed message data template */
     struct message_collection message_collection;  /* A descr. what to send */
     struct transport_data_spec *data_templates[2]; /* client, server tmpls */

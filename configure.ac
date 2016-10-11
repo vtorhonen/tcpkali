@@ -71,6 +71,11 @@ AC_ARG_WITH([libuv],
 AC_CHECK_HEADERS(curses.h term.h)
 AC_CHECK_LIB([ncurses], [tgetent])
 
+dnl OpenSSL
+AC_CHECK_LIB([crypto],[X509_get_issuer_name])
+AC_CHECK_LIB([ssl],[SSL_library_init])
+AC_CHECK_HEADERS([openssl/ssl.h openssl/err.h openssl/crypto.h])
+
 dnl Enable Address Sanitizer, if supported by gcc (4.8+) or clang.
 dnl http://clang.llvm.org/docs/AddressSanitizer.html
 dnl https://code.google.com/p/address-sanitizer/wiki/HowToBuild

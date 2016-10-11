@@ -44,6 +44,9 @@
 
 #include <config.h>
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
@@ -124,6 +127,9 @@ struct connection {
         size_t sbmh_size;
     } latency;
     struct StreamBMH *sbmh_stop_ctx;
+    /* SSL/TLS support */
+    SSL_CTX *ssl_ctx;
+    SSL *ssl_fd;
 };
 
 struct loop_arguments {
@@ -275,6 +281,8 @@ static void debug_dump_data_highlight(const char *prefix, int fd,
                                       const void *data, size_t size,
                                       ssize_t limit, size_t hl_offset,
                                       size_t hl_length);
+void ssl_init_ctx(SSL_CTX **ctx);
+void ssl_setup(TK_P_ struct connection *conn, int sockfd);
 
 #ifdef USE_LIBUV
 static void
@@ -1452,6 +1460,35 @@ static void start_new_connection(TK_P) {
     common_connection_init(TK_A_ conn, CONN_OUTGOING, conn_state, sockfd);
 }
 
+void
+ssl_init_ctx(SSL_CTX **ctx) {
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
+    const SSL_METHOD *method = TLSv1_2_client_method();
+    *ctx = SSL_CTX_new(method);
+}
+
+void
+ssl_setup(TK_P_ struct connection *conn, int sockfd) {
+    struct loop_arguments *largs = tk_userdata(TK_A);
+    SSL_library_init();
+    ssl_init_ctx(&(conn->ssl_ctx));
+    if(conn->ssl_ctx == NULL) {
+        DEBUG(DBG_ERROR, "Cannot create SSL context: %lu\n",
+            ERR_get_error());
+    }
+    else {
+        conn->ssl_fd = SSL_new(conn->ssl_ctx);
+        SSL_set_fd(conn->ssl_fd, sockfd);
+        if(SSL_connect(conn->ssl_fd) == -1) {
+            conn->ssl_fd = NULL;
+            DEBUG(DBG_ERROR, "Cannot create SSL context: %lu\n",
+                ERR_get_error());
+        }
+    }
+    assert(conn->ssl_fd != NULL);
+}
+
 /*
  * Pick an address in a round-robin fashion, skipping certainly broken ones.
  */
@@ -1581,6 +1618,10 @@ common_connection_init(TK_P_ struct connection *conn, enum conn_type conn_type,
     maybe_enable_dump(largs, conn_type, sockfd);
 
     double now = tk_now(TK_A);
+
+    if(largs->params.ssl_enable != 0) {
+        ssl_setup(TK_A_ conn, sockfd);
+    }
 
     if(largs->params.latency_setting != 0) {
         conn->latency.connection_initiated = now;
@@ -1957,8 +1998,15 @@ passive_websocket_cb(TK_P_ tk_io *w, int revents) {
 
     if(revents & TK_READ) {
         for(;;) {
-            ssize_t rd = read(tk_fd(w), largs->scratch_recv_buf,
+            ssize_t rd = 0;
+            if(largs->params.ssl_enable != 0) {
+                rd = SSL_read(conn->ssl_fd, largs->scratch_recv_buf,
                               sizeof(largs->scratch_recv_buf));
+            }
+            else {
+                rd = read(tk_fd(w), largs->scratch_recv_buf,
+                          sizeof(largs->scratch_recv_buf));
+            }
             switch(rd) {
             case -1:
                 switch(errno) {
@@ -2301,7 +2349,13 @@ connection_cb(TK_P_ tk_io *w, int revents) {
             }
 
             assert(read_size > 0);
-            ssize_t rd = read(tk_fd(w), largs->scratch_recv_buf, read_size);
+            ssize_t rd = 0;
+            if(largs->params.ssl_enable != 0) {
+                rd = SSL_read(conn->ssl_fd, largs->scratch_recv_buf, read_size);
+            }
+            else {
+                rd = read(tk_fd(w), largs->scratch_recv_buf, read_size);
+            }
             switch(rd) {
             case -1:
                 switch(errno) {
@@ -2414,7 +2468,13 @@ process_WRITE:
                              ? available_body
                              : conn->send_limit.minimal_move_size);
 
-            ssize_t wrote = write(tk_fd(w), position, available_write);
+            ssize_t wrote = 0;
+            if(largs->params.ssl_enable != 0) {
+                wrote = SSL_write(conn->ssl_fd, position, available_write);
+            }
+            else {
+                wrote = write(tk_fd(w), position, available_write);
+            }
             if(wrote == -1) {
                 char buf[INET6_ADDRSTRLEN + 64];
                 switch(errno) {

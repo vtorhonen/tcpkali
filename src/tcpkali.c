@@ -101,6 +101,7 @@ static struct option cli_long_options[] = {
     {"rcvbuf", 1, 0, CLI_SOCKET_OPT + 'R'},
     {"sndbuf", 1, 0, CLI_SOCKET_OPT + 'S'},
     {"source-ip", 1, 0, 'I'},
+    {"ssl", 0, 0, 'x'},
     {"statsd", 0, 0, CLI_STATSD_OFFSET + 'e'},
     {"statsd-host", 1, 0, CLI_STATSD_OFFSET + 'h'},
     {"statsd-port", 1, 0, CLI_STATSD_OFFSET + 'p'},
@@ -587,6 +588,9 @@ main(int argc, char **argv) {
             break;
         case 'W': /* --websocket: Enable WebSocket framing */
             engine_params.websocket_enable = 1;
+            break;
+        case 'x': /* --ssl: Enable SSL/TLS */
+            engine_params.ssl_enable = 1;
             break;
         case CLI_LATENCY + 'c': /* --latency-connect */
             engine_params.latency_setting |= SLT_CONNECT;

@@ -2600,6 +2600,14 @@ connection_free_internals(struct connection *conn) {
         }
     }
 
+    /* Remove SSL/TLS conn and context */
+    if(conn->ssl_fd) {
+        SSL_free(conn->ssl_fd);
+    }
+    if(conn->ssl_ctx) {
+        SSL_CTX_free(conn->ssl_ctx);
+    }
+
     /* Remove --message-stop context. */
     if(conn->sbmh_stop_ctx) {
         free(conn->sbmh_stop_ctx);

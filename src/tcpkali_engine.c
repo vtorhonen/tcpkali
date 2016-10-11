@@ -1482,10 +1482,11 @@ ssl_setup(TK_P_ struct connection *conn, int sockfd) {
         SSL_set_fd(conn->ssl_fd, sockfd);
         if(SSL_connect(conn->ssl_fd) == -1) {
             conn->ssl_fd = NULL;
-            DEBUG(DBG_ERROR, "Cannot create SSL context: %lu\n",
+            DEBUG(DBG_ERROR, "Cannot create SSL session: %lu\n",
                 ERR_get_error());
         }
     }
+    assert(conn->ssl_ctx != NULL);
     assert(conn->ssl_fd != NULL);
 }
 
